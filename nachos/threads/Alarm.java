@@ -48,6 +48,6 @@ public class Alarm {
 	// for now, cheat just to get something working (busy waiting is bad)
 	long wakeTime = Machine.timer().getTime() + x;
 	while (wakeTime > Machine.timer().getTime())
-	    KThread.yield();
+	    KThread.sleep();
     }
 }

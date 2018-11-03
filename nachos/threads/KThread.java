@@ -45,6 +45,7 @@ public class KThread {
     public KThread() {
 	if (currentThread != null) {
 	    tcb = new TCB();
+	    
 	}	    
 	else {
 	    readyQueue = ThreadedKernel.scheduler.newThreadQueue(false);
@@ -185,14 +186,17 @@ public class KThread {
 	Lib.debug(dbgThread, "Finishing thread: " + currentThread.toString());
 	
 	Machine.interrupt().disable();
-
+	
 	Machine.autoGrader().finishingCurrentThread();
 
 	Lib.assertTrue(toBeDestroyed == null);
 	toBeDestroyed = currentThread;
-
-
+	
 	currentThread.status = statusFinished;
+	if(currentThread.JoinThread != null && currentThread.Joined == false) {
+		currentThread.Joined = true;
+		currentThread.JoinThread.ready();
+	}
 	
 	sleep();
     }
@@ -274,10 +278,18 @@ public class KThread {
      */
     public void join() {
 	Lib.debug(dbgThread, "Joining to thread: " + toString());
-
 	Lib.assertTrue(this != currentThread);
 
-    }
+	boolean intStatus = Machine.interrupt().disable();
+	
+	if(this.Joined == true)
+		return;
+	if(this.status != statusFinished){
+		this.JoinThread = currentThread;
+		sleep();
+	}
+	Machine.interrupt().restore(intStatus);		
+	}
 
     /**
      * Create the idle thread. Whenever there are no threads ready to be run,
@@ -405,9 +417,34 @@ public class KThread {
 	
 	new KThread(new PingTest(1)).setName("forked thread").fork();
 	new PingTest(0).run();
+	joinTest1();
+	Condition2.cvTest5();
     }
 
     private static final char dbgThread = 't';
+    
+    private static void joinTest1 () {
+    	KThread child1 = new KThread( new Runnable () {
+    		public void run() {
+    		    System.out.println("I (heart) Nachos!");
+    		}
+    	    });
+    	child1.setName("child1").fork();
+
+    	// We want the child to finish before we call join.  Although
+    	// our solutions to the problems cannot busy wait, our test
+    	// programs can!
+
+    	for (int i = 0; i < 5; i++) {
+    	    System.out.println ("busy...");
+    	    KThread.currentThread().yield();
+    	}
+
+    	child1.join();
+    	System.out.println("After joining, child1 should be finished.");
+    	System.out.println("is it? " + (child1.status == statusFinished));
+    	Lib.assertTrue((child1.status == statusFinished), " Expected child1 to be finished.");
+        }
 
     /**
      * Additional state used by schedulers.
@@ -431,6 +468,9 @@ public class KThread {
     private String name = "(unnamed thread)";
     private Runnable target;
     private TCB tcb;
+    private KThread JoinThread = null;
+    private boolean Joined = false;
+    private long wake;
 
     /**
      * Unique identifer for this thread. Used to deterministically compare
@@ -439,7 +479,7 @@ public class KThread {
     private int id = numCreated++;
     /** Number of times the KThread constructor was called. */
     private static int numCreated = 0;
-
+    
     private static ThreadQueue readyQueue = null;
     private static KThread currentThread = null;
     private static KThread toBeDestroyed = null;
