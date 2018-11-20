@@ -183,22 +183,18 @@ public class KThread {
      * delete this thread.
      */
     public static void finish() {
-	Lib.debug(dbgThread, "Finishing thread: " + currentThread.toString());
-	
-	Machine.interrupt().disable();
-	
-	Machine.autoGrader().finishingCurrentThread();
+    	Lib.debug(dbgThread, "Finishing thread: " + currentThread.toString());
 
-	Lib.assertTrue(toBeDestroyed == null);
-	toBeDestroyed = currentThread;
-	
-	currentThread.status = statusFinished;
-	if(currentThread.JoinThread != null && currentThread.Joined == false) {
-		currentThread.Joined = true;
-		currentThread.JoinThread.ready();
-	}
-	
-	sleep();
+		Machine.interrupt().disable();
+
+		Machine.autoGrader().finishingCurrentThread();
+
+		Lib.assertTrue(toBeDestroyed == null);
+		toBeDestroyed = currentThread;
+
+		currentThread.status = statusFinished;
+
+		sleep();
     }
 
     /**
@@ -277,18 +273,21 @@ public class KThread {
      * thread.
      */
     public void join() {
-	Lib.debug(dbgThread, "Joining to thread: " + toString());
-	Lib.assertTrue(this != currentThread);
+    	Lib.debug(dbgThread, "Joining to thread: " + toString());
 
-	boolean intStatus = Machine.interrupt().disable();
-	
-	if(this.Joined == true)
-		return;
-	if(this.status != statusFinished){
-		this.JoinThread = currentThread;
-		sleep();
-	}
-	Machine.interrupt().restore(intStatus);		
+		Lib.assertTrue(this != currentThread);
+
+		boolean intStatus = Machine.interrupt().disable();
+		if (this.status != statusFinished) {
+			// enable priority
+			ThreadQueue waitQueue = ThreadedKernel.scheduler
+					.newThreadQueue(true);
+			waitQueue.acquire(this);// give this access
+			waitQueue.waitForAccess(currentThread);
+			while (this.status != statusFinished)
+				KThread.yield();
+		}
+		Machine.interrupt().restore(intStatus);		
 	}
 
     /**
