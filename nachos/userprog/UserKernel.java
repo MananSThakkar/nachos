@@ -17,7 +17,7 @@ public class UserKernel extends ThreadedKernel {
 	super();
     }
 
-    public int pagesAmount = Machine.processor().getNumPhysPages();
+    public int numPages = Machine.processor().getNumPhysPages();
     /**
      * Initialize this kernel. Creates a synchronized console and sets the
      * processor's exception handler.
@@ -32,7 +32,7 @@ public class UserKernel extends ThreadedKernel {
 	    });
 	
 	pageLock = new Lock();
-	for (int i = 0; i < pagesAmount; i++) {
+	for (int i = 0; i < numPages; i++) {
 		pageTable.add(i);
 	}
     }
@@ -91,13 +91,13 @@ public class UserKernel extends ThreadedKernel {
     }
 
     public static int getPage() {
-		int pageNumber = -1;
+		int pageNum = -1;
 
 		Machine.interrupt().disable();
 		if (pageTable.isEmpty() == false)
-			pageNumber = pageTable.removeFirst();
+			pageNum = pageTable.removeFirst();
 		Machine.interrupt().enable();
-		return pageNumber;
+		return pageNum;
 	}
 
 	//add a page to pageTable

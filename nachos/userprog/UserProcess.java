@@ -5,6 +5,7 @@ import nachos.threads.*;
 import nachos.userprog.*;
 
 import java.io.EOFException;
+import java.util.*;
 
 /**
  * Encapsulates the state of a user process that is not contained in its
@@ -27,6 +28,24 @@ public class UserProcess {
 	pageTable = new TranslationEntry[numPhysPages];
 	for (int i=0; i<numPhysPages; i++)
 	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
+	
+
+	boolean stat = Machine.interrupt().disable();
+
+	processID = counter++;
+
+	fileList = new OpenFile[MAX_FILES];
+	filePositionList = new int[MAX_FILES];
+	fileDeleteList = new HashSet<String>();
+	
+	fileList[STDINPUT] = UserKernel.console.openForReading();
+	fileList[STDOUTPUT] = UserKernel.console.openForWriting();
+	Machine.interrupt().restore(stat);
+
+	parentProcess = null;
+	childProc = new LinkedList<UserProcess>();
+	childProcStatus = new HashMap<Integer, Integer>();
+	
     }
     
     /**
@@ -348,7 +367,7 @@ public class UserProcess {
 
 
     private static final int
-        syscallHalt = 0,
+     syscallHalt = 0,
 	syscallExit = 1,
 	syscallExec = 2,
 	syscallJoin = 3,
@@ -391,7 +410,24 @@ public class UserProcess {
 	switch (syscall) {
 	case syscallHalt:
 	    return handleHalt();
-
+	case syscallCreate:
+		return handleCreate(a0);
+	case syscallOpen:
+		return handleOpen(a0);
+	case syscallRead:
+		return handleRead(a0, a1, a2);
+	case syscallWrite:
+		return handleWrite(a0, a1, a2);
+	case syscallClose:
+		return handleClose(a0);
+	case syscallUnlink:
+		return handleUnlink(a0);
+	case syscallExec:
+		return handleExec(a0, a1, a2);
+	case syscallJoin:
+		return handleJoin(a0, a1);
+	case syscallExit:
+		return handleExit(a0);
 
 	default:
 	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
@@ -400,7 +436,140 @@ public class UserProcess {
 	return 0;
     }
 
-    /**
+    private int handleOpen(int a0) {
+    	String file_Name = readVirtualMemoryString(a0, MAX_STRLENGTH);
+
+		int fd = getAvailIndex();
+		if(file_Name == null || fd == -1 || fileDeleteList.contains(file_Name)) {
+			return -1;
+		}
+
+		OpenFile file = UserKernel.fileSystem.open(file_Name, false);
+
+		if(file == null) {
+			return -1;
+		}
+
+		fileList[fd] = file;
+		return fd;
+	}
+
+	private int handleJoin(int a0, int a1) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	private int handleExec(int a0, int a1, int a2) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	private int handleUnlink(int a0) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	private int handleClose(int fd) {
+		if((fd >= MAX_FILES || fd < 0)
+				|| fileList[fd] == null) {
+			return -1;
+		}
+		
+	
+		String fileName = fileList[fd].getName();
+		fileList[fd].close();
+		fileList[fd] = null;
+		filePositionList[fd] = 0;
+		
+		
+		if(fileDeleteList.contains(fileName)) {	
+			if(UserKernel.fileSystem.remove(fileName) == true) {	
+				fileDeleteList.remove(fileName);	
+				return 0;	
+			}	
+			else {
+				return -1;	
+			}	
+		}	
+		
+		return 0; 
+	}
+
+	private int handleExit(int a0) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	private int handleWrite(int fd, int buffer, int size) {
+		
+		if(size < 0 || (fd >= MAX_FILES || fd < 0)
+				|| fileList[fd] == null) {
+			return -1;
+		}
+		
+		byte[] kernelBuffer = new byte[size];
+		int writeSize = readVirtualMemory(buffer, kernelBuffer, 0, size);
+		
+		int bytesToWrite;
+		if(fd < 2) { 
+			bytesToWrite =  fileList[fd].write(kernelBuffer, 0, writeSize);
+		}	
+		else {	
+			bytesToWrite =  fileList[fd].write(filePositionList[fd], kernelBuffer, 0, writeSize);	
+		}	
+		if(fd >= 2) {	
+			filePositionList[fd] += (bytesToWrite > 0) ? bytesToWrite : 0;	
+		}	
+		return (bytesToWrite < size && bytesToWrite != 0) ? -1 : bytesToWrite;
+	}
+
+	private int handleRead(int fd, int buffer, int size) {
+	
+		if(size < 0 || (fd >= MAX_FILES || fd < 0)
+				|| fileList[fd] == null) {
+			return -1;
+		}
+		
+		
+		byte[] readBuffer = new byte[size];
+		int readSize;
+		if(fd < 2) { 
+			readSize = fileList[fd].read(readBuffer, 0, size); 
+		} 
+		else {	
+			readSize = fileList[fd].read(filePositionList[fd], readBuffer, 0, size); 
+		}	
+		
+		if(readSize == -1 || readSize == 0) {
+			return -1;
+		}
+		
+		int bytesTransferred = writeVirtualMemory(buffer, readBuffer, 0, readSize);
+		if(fd >= 2) { 
+			filePositionList[fd] += bytesTransferred;	
+		}	
+		return bytesTransferred;	}
+
+	private int handleCreate(int a0) {
+		String fileName = readVirtualMemoryString(a0, MAX_STRLENGTH);
+		
+		
+		int fd = getAvailIndex();
+		if(fileName == null || fd == -1 || fileDeleteList.contains(fileName)) {
+			return -1;
+		}
+
+		OpenFile OFStatus = UserKernel.fileSystem.open(fileName, true);
+
+		if(OFStatus == null) {
+			return -1;
+		}
+
+		fileList[fd] = OFStatus;
+		return fd;
+	}
+
+	/**
      * Handle a user exception. Called by
      * <tt>UserKernel.exceptionHandler()</tt>. The
      * <i>cause</i> argument identifies which exception occurred; see the
@@ -429,6 +598,16 @@ public class UserProcess {
 	    Lib.assertNotReached("Unexpected exception");
 	}
     }
+    
+    /** Get the next available index for fileList */
+	protected int getAvailIndex() {
+		for(int i = 2; i < MAX_FILES; i++) {
+			if(fileList[i] == null) {
+				return i;
+			}
+		}
+		return -1;
+	}
 
     /** The program being run by this process. */
     protected Coff coff;
@@ -446,4 +625,19 @@ public class UserProcess {
 	
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
+    
+    protected OpenFile[] fileList;
+	private final int MAX_FILES = 16;
+	private final int MAX_STRLENGTH = 256;
+	protected int[] filePositionList;
+	private static HashSet<String> fileDeleteList;
+	protected final int STDINPUT = 0;
+	protected final int STDOUTPUT = 1;
+
+	protected int processID;
+
+	protected UserProcess parentProcess; 
+	protected LinkedList<UserProcess> childProc;  
+	protected HashMap<Integer, Integer> childProcStatus; 
+	protected static int counter = 0; 
 }
