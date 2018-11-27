@@ -239,21 +239,15 @@ public class PriorityScheduler extends Scheduler {
          */
         public boolean transferPriority;
 
-        /** The queue  waiting on this resource */
-        private LinkedList<KThread> waitQueue = new LinkedList<KThread>();  // hy+
+       private LinkedList<KThread> waitQueue = new LinkedList<KThread>();  // hy+
 
-        /** The ThreadState corresponds to the holder of the resource */
         private ThreadState resourceOwner = null;             // hy+
 
-        /** Set to true when a new thread is added to the queue, 
-         *  or any of the queues in the waitQueue flag themselves as dirty */
         private boolean bad;                  // hy+ 
 
-        /** The cached highest of the effective priorities in the waitQueue. 
-         *  This value is invalidated while dirty is true */
         private int effectivePriority; 
 
-    } /* PriorityQueue */
+    } 
 
 
     /**
@@ -377,14 +371,6 @@ public class PriorityScheduler extends Scheduler {
         setBad();
 	}	
 
-    /**
-     * ThreadState.setDirty Set the dirty flag, then call setdirty() on each thread
-     * of priority queue that the thread is waiting for.
-     *
-     * ThreadState.setDirty and PriorityQueue.setDirty would invoke each other, they 
-     * are mutually recursive.
-     *
-     */
     public void setBad() {
         if (bad) {
             return;
