@@ -30,17 +30,21 @@ public class UserProcess {
 	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
 	
 
-	boolean stat = Machine.interrupt().disable();
+	boolean status = Machine.interrupt().disable();
 
 	processID = counter++;
+	
+	fds = new FileDescriptor[MAXFDS];
 
-	fileList = new OpenFile[MAX_FILES];
-	filePositionList = new int[MAX_FILES];
+	filePositionList = new int[MAXFDS];
 	fileDeleteList = new HashSet<String>();
 	
-	fileList[STDINPUT] = UserKernel.console.openForReading();
-	fileList[STDOUTPUT] = UserKernel.console.openForWriting();
-	Machine.interrupt().restore(stat);
+	fds[STDIN].openFile = UserKernel.console.openForReading();
+	fds[STDIN].fileName = "stdin";
+	fds[STDOUT].openFile = UserKernel.console.openForWriting();
+	fds[STDOUT].fileName = "stdout";
+	
+	Machine.interrupt().restore(status);
 
 	parentProcess = null;
 	childProc = new LinkedList<UserProcess>();
@@ -437,7 +441,7 @@ public class UserProcess {
     }
 
     private int handleOpen(int a0) {
-    	String file_Name = readVirtualMemoryString(a0, MAX_STRLENGTH);
+    	String file_Name = readVirtualMemoryString(a0, MAXSTRLEN);
 
 		int fd = getAvailIndex();
 		if(file_Name == null || fd == -1 || fileDeleteList.contains(file_Name)) {
@@ -450,7 +454,7 @@ public class UserProcess {
 			return -1;
 		}
 
-		fileList[fd] = file;
+		fds[fd] = file;
 		return fd;
 	}
 
@@ -470,13 +474,13 @@ public class UserProcess {
 	}
 
 	private int handleClose(int fd) {
-		if((fd >= MAX_FILES || fd < 0)
+		if((fd >= MAXFDS || fd < 0)
 				|| fileList[fd] == null) {
 			return -1;
 		}
 		
 	
-		String fileName = fileList[fd].getName();
+		String fileName = fds[fd].getName();
 		fileList[fd].close();
 		fileList[fd] = null;
 		filePositionList[fd] = 0;
@@ -501,9 +505,9 @@ public class UserProcess {
 	}
 
 	private int handleWrite(int fd, int buffer, int size) {
-		
-		if(size < 0 || (fd >= MAX_FILES || fd < 0)
-				|| fileList[fd] == null) {
+	/*****	
+		if(size < 0 || (fd >= MAXFDS || fd < 0)
+				|| fds[fd] == null) {
 			return -1;
 		}
 		
@@ -525,8 +529,8 @@ public class UserProcess {
 
 	private int handleRead(int fd, int buffer, int size) {
 	
-		if(size < 0 || (fd >= MAX_FILES || fd < 0)
-				|| fileList[fd] == null) {
+		if(size < 0 || (fd >= MAXFDS || fd < 0)
+				|| fds[fd] == null) {
 			return -1;
 		}
 		
@@ -534,10 +538,10 @@ public class UserProcess {
 		byte[] readBuffer = new byte[size];
 		int readSize;
 		if(fd < 2) { 
-			readSize = fileList[fd].read(readBuffer, 0, size); 
+			readSize = fds[fd].read(readBuffer, 0, size); 
 		} 
 		else {	
-			readSize = fileList[fd].read(filePositionList[fd], readBuffer, 0, size); 
+			readSize = fds[fd].read(filePositionList[fd], readBuffer, 0, size); 
 		}	
 		
 		if(readSize == -1 || readSize == 0) {
@@ -551,7 +555,7 @@ public class UserProcess {
 		return bytesTransferred;	}
 
 	private int handleCreate(int a0) {
-		String fileName = readVirtualMemoryString(a0, MAX_STRLENGTH);
+		String fileName = readVirtualMemoryString(a0, MAXSTRLEN);
 		
 		
 		int fd = getAvailIndex();
@@ -565,10 +569,10 @@ public class UserProcess {
 			return -1;
 		}
 
-		fileList[fd] = OFStatus;
+		fds[fd] = OFStatus;
 		return fd;
 	}
-
+**/
 	/**
      * Handle a user exception. Called by
      * <tt>UserKernel.exceptionHandler()</tt>. The
@@ -601,8 +605,8 @@ public class UserProcess {
     
     /** Get the next available index for fileList */
 	protected int getAvailIndex() {
-		for(int i = 2; i < MAX_FILES; i++) {
-			if(fileList[i] == null) {
+		for(int i = 2; i < MAXFDS; i++) {
+			if(fds[i] == null) {
 				return i;
 			}
 		}
@@ -625,15 +629,18 @@ public class UserProcess {
 	
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
-    
-    protected OpenFile[] fileList;
-	private final int MAX_FILES = 16;
-	private final int MAX_STRLENGTH = 256;
+   
+	private final int MAXFDS = 16;
+	private final int MAXSTRLEN = 256;
 	protected int[] filePositionList;
 	private static HashSet<String> fileDeleteList;
-	protected final int STDINPUT = 0;
-	protected final int STDOUTPUT = 1;
-
+	protected final int STDIN = 0;
+	protected final int STDOUT = 1;
+	class FileDescriptor{
+		String fileName;
+		OpenFile openFile;
+	}
+	private FileDescriptor[] fds;
 	protected int processID;
 
 	protected UserProcess parentProcess; 
