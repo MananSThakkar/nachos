@@ -1,5 +1,7 @@
 package nachos.userprog;
 
+import java.util.LinkedList;
+
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
@@ -15,6 +17,7 @@ public class UserKernel extends ThreadedKernel {
 	super();
     }
 
+    public int pagesAmount = Machine.processor().getNumPhysPages();
     /**
      * Initialize this kernel. Creates a synchronized console and sets the
      * processor's exception handler.
@@ -27,6 +30,11 @@ public class UserKernel extends ThreadedKernel {
 	Machine.processor().setExceptionHandler(new Runnable() {
 		public void run() { exceptionHandler(); }
 	    });
+	
+	pageLock = new Lock();
+	for (int i = 0; i < pagesAmount; i++) {
+		pageTable.add(i);
+	}
     }
 
     /**
@@ -82,6 +90,25 @@ public class UserKernel extends ThreadedKernel {
 	process.handleException(cause);
     }
 
+    public static int getPage() {
+		int pageNumber = -1;
+
+		Machine.interrupt().disable();
+		if (pageTable.isEmpty() == false)
+			pageNumber = pageTable.removeFirst();
+		Machine.interrupt().enable();
+		return pageNumber;
+	}
+
+	//add a page to pageTable
+	public static void addAPage(int pageTNum) {
+		Lib.assertTrue(pageTNum >= 0 && pageTNum < Machine.processor().getNumPhysPages());
+		Machine.interrupt().disable();
+		pageTable.add(pageTNum);
+		Machine.interrupt().enable();
+	}
+     
+    
     /**
      * Start running user programs, by creating a process and running a shell
      * program in it. The name of the shell program it must run is returned by
@@ -106,9 +133,26 @@ public class UserKernel extends ThreadedKernel {
     public void terminate() {
 	super.terminate();
     }
+    
+    public static boolean deletePage(int pageTnum) {
+		boolean value = false;
+
+		pageLock.acquire();
+		pageTable.add(new Integer(pageTnum));
+		value = true;
+		pageLock.release();
+
+		return value;
+}
 
     /** Globally accessible reference to the synchronized console. */
     public static SynchConsole console;
+    
+    public static int numProcess = 0;
+    
+    private static LinkedList<Integer> pageTable = new LinkedList<Integer>();
+
+    private static Lock pageLock;
 
     // dummy variables to make javac smarter
     private static Coff dummy1 = null;
