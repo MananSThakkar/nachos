@@ -505,26 +505,31 @@ public class UserProcess {
 	}
 
 	private int handleWrite(int fd, int buffer, int size) {
-	/*****	
-		if(size < 0 || (fd >= MAXFDS || fd < 0)
-				|| fds[fd] == null) {
+	
+		if(fd <0 || fd >MAXFDS) {
 			return -1;
 		}
 		
-		byte[] kernelBuffer = new byte[size];
-		int writeSize = readVirtualMemory(buffer, kernelBuffer, 0, size);
+		FileDescriptor descriptor = fds[fd];
 		
-		int bytesToWrite;
-		if(fd < 2) { 
-			bytesToWrite =  fileList[fd].write(kernelBuffer, 0, writeSize);
-		}	
-		else {	
-			bytesToWrite =  fileList[fd].write(filePositionList[fd], kernelBuffer, 0, writeSize);	
-		}	
-		if(fd >= 2) {	
-			filePositionList[fd] += (bytesToWrite > 0) ? bytesToWrite : 0;	
-		}	
-		return (bytesToWrite < size && bytesToWrite != 0) ? -1 : bytesToWrite;
+		if(descriptor == null) {
+			return -1;
+		}
+		if(size < 0) {
+			return -1;
+		}else if (size ==0) {
+			return 0;
+		}
+		
+		byte[] kernelBuffer = new byte[size];
+		
+		int writeSize = readVirtualMemory(buffer, kernelBuffer, 0 , size);
+		if(writeSize < size) {
+			return -1;
+		}
+		
+		writeSize = descriptor.openFile.write(kernelBuffer, 0 , writeSize);
+		return writeSize;
 	}
 
 	private int handleRead(int fd, int buffer, int size) {
