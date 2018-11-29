@@ -5,7 +5,6 @@ import nachos.threads.*;
 import nachos.userprog.*;
 
 import java.io.EOFException;
-import java.util.*;
 
 /**
  * Encapsulates the state of a user process that is not contained in its
@@ -29,27 +28,11 @@ public class UserProcess {
 	for (int i=0; i<numPhysPages; i++)
 	    pageTable[i] = new TranslationEntry(i,i, true,false,false,false);
 	
-
-	boolean status = Machine.interrupt().disable();
-
-	processID = counter++;
-	
 	fds = new FileDescriptor[MAXFDS];
-
-	filePositionList = new int[MAXFDS];
-	fileDeleteList = new HashSet<String>();
-	
 	fds[STDIN].openFile = UserKernel.console.openForReading();
 	fds[STDIN].fileName = "stdin";
 	fds[STDOUT].openFile = UserKernel.console.openForWriting();
 	fds[STDOUT].fileName = "stdout";
-	
-	Machine.interrupt().restore(status);
-
-	parentProcess = null;
-	childProc = new LinkedList<UserProcess>();
-	childProcStatus = new HashMap<Integer, Integer>();
-	
     }
     
     /**
@@ -371,7 +354,7 @@ public class UserProcess {
 
 
     private static final int
-     syscallHalt = 0,
+        syscallHalt = 0,
 	syscallExit = 1,
 	syscallExec = 2,
 	syscallJoin = 3,
@@ -424,14 +407,6 @@ public class UserProcess {
 		return handleWrite(a0, a1, a2);
 	case syscallClose:
 		return handleClose(a0);
-	case syscallUnlink:
-		return handleUnlink(a0);
-	case syscallExec:
-		return handleExec(a0, a1, a2);
-	case syscallJoin:
-		return handleJoin(a0, a1);
-	case syscallExit:
-		return handleExit(a0);
 
 	default:
 	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
@@ -440,72 +415,22 @@ public class UserProcess {
 	return 0;
     }
 
-    private int handleOpen(int a0) {
-    	String file_Name = readVirtualMemoryString(a0, MAXSTRLEN);
+    private int handleClose(int fd) {
 
-		int fd = getAvailIndex();
-		if(file_Name == null || fd == -1 || fileDeleteList.contains(file_Name)) {
-			return -1;
-		}
-
-		OpenFile file = UserKernel.fileSystem.open(file_Name, false);
-
-		if(file == null) {
-			return -1;
-		}
-
-		fds[fd] = file;
-		return fd;
-	}
-
-	private int handleJoin(int a0, int a1) {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	private int handleExec(int a0, int a1, int a2) {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	private int handleUnlink(int a0) {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	private int handleClose(int fd) {
-		if((fd >= MAXFDS || fd < 0)
-				|| fileList[fd] == null) {
-			return -1;
-		}
-		
-	
-		String fileName = fds[fd].getName();
-		fileList[fd].close();
-		fileList[fd] = null;
-		filePositionList[fd] = 0;
-		
-		
-		if(fileDeleteList.contains(fileName)) {	
-			if(UserKernel.fileSystem.remove(fileName) == true) {	
-				fileDeleteList.remove(fileName);	
-				return 0;	
-			}	
-			else {
-				return -1;	
-			}	
-		}	
-		
-		return 0; 
-	}
-
-	private int handleExit(int a0) {
-		// TODO Auto-generated method stub
-		return 0;
+		 if(fd < 0 || fd > 15) {
+			 return -1;
+		 }
+		 else if(fds[fd] == null) {
+			 return -1;
+		 }
+		 else {
+			 fds[fd].close();
+			 fds[fd] = null;
+		 }
+		 return 0;
 	}
 
 	private int handleWrite(int fd, int buffer, int size) {
-	
 		if(fd <0 || fd >MAXFDS) {
 			return -1;
 		}
@@ -533,51 +458,81 @@ public class UserProcess {
 	}
 
 	private int handleRead(int fd, int buffer, int size) {
-	
-		if(size < 0 || (fd >= MAXFDS || fd < 0)
-				|| fds[fd] == null) {
+		if(fd <0 || fd >MAXFDS) {
 			return -1;
 		}
 		
+		FileDescriptor descriptor = fds[fd];
 		
-		byte[] readBuffer = new byte[size];
-		int readSize;
-		if(fd < 2) { 
-			readSize = fds[fd].read(readBuffer, 0, size); 
-		} 
-		else {	
-			readSize = fds[fd].read(filePositionList[fd], readBuffer, 0, size); 
-		}	
+		if(descriptor == null) {
+			return -1;
+		}
+		if(size < 0) {
+			return -1;
+		}else if (size ==0) {
+			return 0;
+		}
 		
-		if(readSize == -1 || readSize == 0) {
+		byte[] kernelBuffer = new byte[size];
+		
+		int readSize = readVirtualMemory(buffer, kernelBuffer, 0 , size);
+		if(readSize < size) {
 			return -1;
 		}
 		
-		int bytesTransferred = writeVirtualMemory(buffer, readBuffer, 0, readSize);
-		if(fd >= 2) { 
-			filePositionList[fd] += bytesTransferred;	
-		}	
-		return bytesTransferred;	}
+		readSize = descriptor.openFile.read(kernelBuffer, 0 , readSize);
+		return readSize;
+	}
 
-	private int handleCreate(int a0) {
+	private int handleOpen(int a0) {
 		String fileName = readVirtualMemoryString(a0, MAXSTRLEN);
-		
-		
-		int fd = getAvailIndex();
-		if(fileName == null || fd == -1 || fileDeleteList.contains(fileName)) {
-			return -1;
-		}
-
 		OpenFile OFStatus = UserKernel.fileSystem.open(fileName, true);
-
+		
 		if(OFStatus == null) {
 			return -1;
 		}
-
-		fds[fd] = OFStatus;
-		return fd;
+		else {
+			int handle = getNextAvailHandle();
+			if(handle < 0) {
+				return -1;
+			} 
+			else {
+				fds[handle].fileName = fileName;
+				fds[handle].openFile = OFStatus;
+				return handle;
+			}
+		}
 	}
-**/
+
+	private int handleCreate(int a0) {
+		String fileName = readVirtualMemoryString(a0, MAXSTRLEN);
+		OpenFile OFStatus = UserKernel.fileSystem.open(fileName, true);
+		
+		if(OFStatus == null) {
+			return -1;
+		}
+		else {
+			int handle = getNextAvailHandle();
+			if(handle < 0) {
+				return -1;
+			} 
+			else {
+				fds[handle].fileName = fileName;
+				fds[handle].openFile = OFStatus;
+				return handle;
+			}
+		}
+	}
+
+	private int getNextAvailHandle() {
+		for(int i = 0; i < MAXFDS; i++) {
+			if(fds[i] == null) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
 	/**
      * Handle a user exception. Called by
      * <tt>UserKernel.exceptionHandler()</tt>. The
@@ -607,16 +562,6 @@ public class UserProcess {
 	    Lib.assertNotReached("Unexpected exception");
 	}
     }
-    
-    /** Get the next available index for fileList */
-	protected int getAvailIndex() {
-		for(int i = 2; i < MAXFDS; i++) {
-			if(fds[i] == null) {
-				return i;
-			}
-		}
-		return -1;
-	}
 
     /** The program being run by this process. */
     protected Coff coff;
@@ -634,22 +579,19 @@ public class UserProcess {
 	
     private static final int pageSize = Processor.pageSize;
     private static final char dbgProcess = 'a';
-   
-	private final int MAXFDS = 16;
-	private final int MAXSTRLEN = 256;
-	protected int[] filePositionList;
-	private static HashSet<String> fileDeleteList;
-	protected final int STDIN = 0;
+    
+    private final int MAXFDS = 16;
+    private final int MAXSTRLEN = 256;
+    protected final int STDIN = 0;
 	protected final int STDOUT = 1;
 	class FileDescriptor{
+		
 		String fileName;
 		OpenFile openFile;
+		public void close() {
+			// TODO Auto-generated method stub
+			
+		}
 	}
 	private FileDescriptor[] fds;
-	protected int processID;
-
-	protected UserProcess parentProcess; 
-	protected LinkedList<UserProcess> childProc;  
-	protected HashMap<Integer, Integer> childProcStatus; 
-	protected static int counter = 0; 
 }
