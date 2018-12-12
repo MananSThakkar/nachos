@@ -259,6 +259,7 @@ public class UserProcess {
 	if (!loadSections())
 	    return false;
 
+	
 	// store arguments in last page
 	int entryOffset = (numPages-1)*pageSize;
 	int stringOffset = entryOffset + args.length*4;
@@ -267,6 +268,8 @@ public class UserProcess {
 	this.argv = entryOffset;
 	
 	for (int i=0; i<argv.length; i++) {
+
+		//key solution.
 	    byte[] stringOffsetBytes = Lib.bytesFromInt(stringOffset);
 	    Lib.assertTrue(writeVirtualMemory(entryOffset,stringOffsetBytes) == 4);
 	    entryOffset += 4;
