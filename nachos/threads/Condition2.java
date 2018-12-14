@@ -25,7 +25,6 @@ public class Condition2 {
     public Condition2(Lock conditionLock) {
 	this.conditionLock = conditionLock;
 	
-	waitQueue = new LinkedList<KThread>();
     }
     
     public static void cvTest5() {
@@ -75,9 +74,9 @@ public class Condition2 {
         // implemented join yet, then comment out the calls to join
         // and instead uncomment the loop with yield; the loop has the
         // same effect, but is a kludgy way to do it.
-        consumer.join();
-        producer.join();
-        //for (int i = 0; i < 50; i++) { KThread.currentThread().yield(); }
+        // consumer.join();
+        // producer.join();
+         for (int i = 0; i < 50; i++) { KThread.currentThread().yield(); }
     }
 
     /**
@@ -91,13 +90,13 @@ public class Condition2 {
  
 	public void sleep() {
 	Lib.assertTrue(conditionLock.isHeldByCurrentThread());
-
-	conditionLock.release();
 	boolean intStatus = Machine.interrupt().disable();
-	waitQueue.add(KThread.currentThread());
+	conditionLock.release();
+	KThread thread = waitQueue.nextThread();
+	waitQueue.waitForAccess(thread);;
 	KThread.sleep(); 
-	Machine.interrupt().restore(intStatus);
 	conditionLock.acquire();
+	Machine.interrupt().restore(intStatus);
     }
     
 
@@ -107,14 +106,12 @@ public class Condition2 {
      */
     public void wake() {
 	Lib.assertTrue(conditionLock.isHeldByCurrentThread());
-	if (!waitQueue.isEmpty()) {
-		boolean intStatus = Machine.interrupt().disable();
-		KThread thread = waitQueue.removeFirst();
-		if (thread != null) {
+	boolean intStatus = Machine.interrupt().disable();
+		KThread thread = waitQueue.nextThread();
+		if(thread != null)
 			thread.ready();
-		}
-		Machine.interrupt().restore(intStatus);
-		}
+
+	Machine.interrupt().restore(intStatus);
     }
 
     /**
@@ -123,12 +120,61 @@ public class Condition2 {
      */
     public void wakeAll() {
     	Lib.assertTrue(conditionLock.isHeldByCurrentThread());
-		while (!waitQueue.isEmpty())
+		while (waitQueue != null)
 			wake();
 
     }
 
     private Lock conditionLock;
-    private LinkedList<KThread> waitQueue;
+    private ThreadQueue waitQueue = ThreadedKernel.scheduler.newThreadQueue(true);
+    
+    
+    private static class InterlockTest {
+        private static Lock lock;
+        private static Condition2 cv;
+
+        private static class Interlocker implements Runnable {
+            public void run () {
+                lock.acquire();
+                for (int i = 0; i < 10; i++) {
+                    System.out.println(KThread.currentThread().getName());
+                    cv.wake();   // signal
+                    cv.sleep();  // wait
+                }
+                lock.release();
+            }
+        }
+
+        public InterlockTest () {
+            lock = new Lock();
+            cv = new Condition2(lock);
+
+            KThread ping = new KThread(new Interlocker());
+            ping.setName("ping");
+            KThread pong = new KThread(new Interlocker());
+            pong.setName("pong");
+
+            ping.fork();
+            pong.fork();
+
+            // We need to wait for ping to finish, and the proper way
+            // to do so is to join on ping.  (Note that, when ping is
+            // done, pong is sleeping on the condition variable; if we
+            // were also to join on pong, we would block forever.)
+            // For this to work, join must be implemented.  If you
+            // have not implemented join yet, then comment out the
+            // call to join and instead uncomment the loop with
+            // yields; the loop has the same effect, but is a kludgy
+            // way to do it.
+           //  ping.join();
+            for (int i = 0; i < 50; i++) { KThread.currentThread().yield(); }
+        }
+    }
+
+    // Invoke Condition2.selfTest() from ThreadedKernel.selfTest()
+
+    public static void selfTest() {
+        new InterlockTest();
+    }
 	
 }
