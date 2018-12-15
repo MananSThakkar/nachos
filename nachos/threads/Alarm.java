@@ -1,5 +1,8 @@
 package nachos.threads;
 
+import java.util.ArrayList;
+import java.util.LinkedList;
+
 import nachos.machine.*;
 
 /**
@@ -27,7 +30,20 @@ public class Alarm {
      * that should be run.
      */
     public void timerInterrupt() {
-	KThread.currentThread().yield();
+    	boolean intStatus = Machine.interrupt().disable();
+    	long currTime = Machine.timer().getTime();
+    	int i = 0;  
+    	while(i < list.size()) { // iterate through the list using i until i is less then size of timer list.
+    		if(list.get(i).getTime() < currTime) {   // if i < size of list get the position and the time it took to get there and compare it with current time.
+    			KThread thread = list.get(i).getKThread();  // if it is < then current time get the KThread at that position
+    			thread.ready();  // and mark it ready.
+    			list.remove(i);
+    			i = 0;  // set i value to zero again so a new thread can be easily mapped from zero to current time.
+    		}
+    	i++;
+    	}
+    	KThread.yield();
+    	Machine.interrupt().restore(intStatus);
     }
 
     /**
@@ -46,11 +62,37 @@ public class Alarm {
      */
     public void waitUntil(long x) {
 	// for now, cheat just to get something working (busy waiting is bad)
-	long wakeTime = Machine.timer().getTime() + x;
-	while (wakeTime > Machine.timer().getTime())
-	    KThread.sleep();
+    	boolean intStatus = Machine.interrupt().disable();  //disable the interrupt
+    	long wakeTime = Machine.timer().getTime() + x; 
+    	list.add(new timer(KThread.currentThread(), wakeTime));  //use the timer list  and add wake time of the current thread. 
+    	KThread.sleep();  // put KThread to sleep until tone thread has finished its job.
+    	Machine.interrupt().restore(intStatus); // enable the interrupt.
+	
     }
+    
+    private ArrayList<timer> list = new ArrayList<timer>(); //create a list using Array list with timer instances.
 
+    private class timer{  // timer class returns the current thread and wake time.
+    	private long time = 0;
+    	private KThread Thread = null;
+		public timer(KThread currentThread, long wakeTime) {
+			this.Thread = currentThread;
+			this.time = wakeTime;
+		}
+		public long getTime() {
+			return time;
+		}
+		public void setTime(long time) {
+			this.time = time;
+		}
+		public KThread getKThread() {
+			return Thread;
+		}
+		public void setKThread(KThread thread) {
+			Thread = thread;
+		}
+    }
+    
 
     public static void alarmTest1() {
 	int durations[] = {1000, 10*1000, 100*1000};

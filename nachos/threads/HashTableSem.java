@@ -183,15 +183,13 @@ public int getSizeofBuckets(int key) {
 
 
 public void batch(int num_op, ThreadOperationS[] ops) throws Exception {
-	int i = 0;
-	while(i < num_op) {
+	for(int i =0; i < num_op; i++) {
 		switch(ops[i].ops) {
 		case INSERT: this.put(ops[i].key, ops[i].result); 
 		case REMOVE: this.out(ops[i].key);
 		case QUERY: ops[i].setResult(this.get(ops[i].key)); 
 		default:
 		}
-		i++;
 	}
 }
 
