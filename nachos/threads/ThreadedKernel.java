@@ -46,7 +46,6 @@ public class ThreadedKernel extends Kernel {
      * tests here.
      */	
     public void selfTest() {
-    HashTable.selfTest();
     KThread.selfTest();
 	Semaphore.selfTest();
 	SynchList.selfTest();
