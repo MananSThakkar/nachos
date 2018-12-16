@@ -262,7 +262,8 @@ public class PriorityScheduler extends Scheduler {
 	 *
 	 * @return	the effective priority of the associated thread.
 	 */
-	public int getEffectivePriority() {
+	public int getEffectivePriority() {  //not sure how to do it
+		
 	    int effectivePriority = this.priority;
 	    return priority;
 	}
@@ -280,6 +281,9 @@ public class PriorityScheduler extends Scheduler {
 	    
 	    // implement me
 	}
+	
+	
+	
 
 	/**
 	 * Called when <tt>waitForAccess(thread)</tt> (where <tt>thread</tt> is
