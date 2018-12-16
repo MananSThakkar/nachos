@@ -49,6 +49,6 @@ doc:
 	javadoc $(JAVADOCPARAMS) -d ../doc -sourcepath .. $(PACKAGES)
 
 test:
-	cd ../test ; make
+	cd ../test/write1.c/ ; make
 
 ag:	$(patsubst ../ag/%.java,nachos/ag/%.class,$(wildcard ../ag/*.java))

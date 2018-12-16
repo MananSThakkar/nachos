@@ -133,31 +133,32 @@ public class PriorityScheduler extends Scheduler {
 	    this.transferPriority = transferPriority;
 	}
 
-
 	public void waitForAccess(KThread thread) {
 	    Lib.assertTrue(Machine.interrupt().disabled());
 	    ThreadState threadState = getThreadState(thread);
 	    int currentPriority = threadState.getPriority();
-	    if(this.resourceOwner != null && this.resourceOwner.getThread().getName() != "main") {
-	    	if(resourceOwner.getPriority() < currentPriority) {
-	    		this.resourceOwner.priorityBefore = this.resourceOwner.getPriority();
+	    if(this.resourceOwner != null) {
+	    	int priority = resourceOwner.getPriority();
+	    	if(priority < currentPriority) {
+	    		int prevPriorirty = this.resourceOwner.priorityBefore;
+	    		prevPriorirty = priority;
 	    		this.resourceOwner.setPriority(currentPriority);
+	    		setPriority(currentPriority);
 	    	}
 	    	this.resourceOwner.ownedResources.remove(this);
 		}
 	    this.waitQueue.add(threadState);
 	    threadState.waitForAccess(this);
-    }
-	
+	}
+
 	public void acquire(KThread thread) {
 	    Lib.assertTrue(Machine.interrupt().disabled());
-	   
 	    ThreadState threadstate = getThreadState(thread);
 	    if(this.resourceOwner != null) {
 	    	if(this.resourceOwner.priorityBefore != 0) {
 	    		int Before = this.resourceOwner.priorityBefore;
 	    		this.resourceOwner.setPriority(Before);
-	    		this.resourceOwner.priorityBefore = 0;
+	    		Before = 0;
 	    	}
 	    	this.resourceOwner.ownedResources.remove(this);
 	    }
@@ -165,17 +166,15 @@ public class PriorityScheduler extends Scheduler {
 	    threadstate.acquire(this);
 	}
 
-	
 	public KThread nextThread() {
 	    Lib.assertTrue(Machine.interrupt().disabled());
-	   
 	    ThreadState nextThread = this.pickNextThread();
-	    if(nextThread == null) {
-	    	return null;
-	    }
+	    if(nextThread == null) { return null; }
 	    this.waitQueue.remove(nextThread);
-	    this.acquire(nextThread.getThread());
-	    return nextThread.getThread();
+	    KThread Thread = nextThread.getThread();
+	    this.acquire(Thread);
+	    return Thread;
+	   
 	}
 
 	/**
@@ -184,26 +183,27 @@ public class PriorityScheduler extends Scheduler {
 	 *
 	 * @return	the next thread that <tt>nextThread()</tt> would
 	 *		return.
-	 */	
-	
+	 */
 	protected ThreadState pickNextThread() {
-	   int NextPriority = 0;
-	   ThreadState Next = waitQueue.peek();
-	   for(ThreadState currentThread : this.waitQueue) {
-		   int currentPriority = currentThread.getPriority();
-		   
-		   if(currentPriority == NextPriority) {
-			   if(currentThread.threadTime <= Next.threadTime) {
-				   Next = currentThread;
-				   NextPriority = currentPriority;
-			   }
-		   }
-		   else if(Next == null || (currentPriority > NextPriority)) {
-			   Next = currentThread;
-			   NextPriority = currentPriority;
-		   }
-	   }
-	    return Next;
+		ThreadState nextThread = waitQueue.peek();
+		for(ThreadState currThread : this.waitQueue) {
+			int priority = currThread.getPriority();
+			int currPriority = priority;
+			int nextPriority = 0;
+			if(currPriority == nextPriority) {
+				if(currThread.threadTime <= nextThread.threadTime) {
+					nextThread = currThread;
+					nextPriority = currPriority;
+				}
+			}else {
+				if(nextThread == null || currPriority > nextPriority) {
+					nextThread = currThread;
+					nextPriority = currPriority;
+				}
+			}
+		}
+		return nextThread;
+	    
 	}
 	
 	
@@ -216,11 +216,10 @@ public class PriorityScheduler extends Scheduler {
 	 * <tt>true</tt> if this queue should transfer priority from waiting
 	 * threads to the owning thread.
 	 */
+	protected int priority;
 	public boolean transferPriority;
-	
+	protected LinkedList<ThreadState> waitQueue; 
 	protected ThreadState resourceOwner = null;
-	protected LinkedList<ThreadState> waitQueue = new LinkedList<ThreadState>();
-	
     }
 
     /**
@@ -231,6 +230,7 @@ public class PriorityScheduler extends Scheduler {
      * @see	nachos.threads.KThread#schedulingState
      */
     protected class ThreadState {
+	
 	/**
 	 * Allocate a new <tt>ThreadState</tt> object and associate it with the
 	 * specified thread.
@@ -241,6 +241,11 @@ public class PriorityScheduler extends Scheduler {
 	    this.thread = thread;
 	    this.ownedResources = new LinkedList<PriorityQueue>();
 	    setPriority(priorityDefault);
+	}
+
+	public KThread getThread() {
+		// TODO Auto-generated method stub
+		return thread;
 	}
 
 	/**
@@ -258,8 +263,8 @@ public class PriorityScheduler extends Scheduler {
 	 * @return	the effective priority of the associated thread.
 	 */
 	public int getEffectivePriority() {
-	    // implement me
-	    return this.getPriority();
+	    int effectivePriority = this.priority;
+	    return priority;
 	}
 
 	/**
@@ -289,13 +294,9 @@ public class PriorityScheduler extends Scheduler {
 	 * @see	nachos.threads.ThreadQueue#waitForAccess
 	 */
 	public void waitForAccess(PriorityQueue waitQueue) {
-	    // implement me
-		this.threadTime = Machine.timer().getTime();
-		this.waiting = waitQueue;
-		
-		this.ownedResources.remove(waitQueue);
-		
-	
+	    long threadTime = Machine.timer().getTime();
+	    this.waiting = waitQueue;
+	    this.ownedResources.remove(waitQueue);
 	}
 
 	/**
@@ -309,27 +310,18 @@ public class PriorityScheduler extends Scheduler {
 	 * @see	nachos.threads.ThreadQueue#nextThread
 	 */
 	public void acquire(PriorityQueue waitQueue) {
-	    // implement me
 		this.ownedResources.add(waitQueue);
-		this.waiting = null;
-			
-	}
-	
-	
-	public KThread getThread() {
-        return thread;
-}
+	    this.waiting = null;
+	}	
 
 	/** The thread with which this object is associated. */	   
 	protected KThread thread;
 	/** The priority of the associated thread. */
+	public int priorityBefore = 0;
 	protected int priority;
-	protected int priorityBefore = 0;
 	protected long threadTime = Machine.timer().getTime();
 	protected PriorityQueue waiting = null;
 	protected LinkedList<PriorityQueue> ownedResources;
-
 	
     }
-
 }
