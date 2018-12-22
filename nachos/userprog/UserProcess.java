@@ -1,3 +1,4 @@
+
 package nachos.userprog;
 
 import nachos.machine.*;
@@ -259,7 +260,6 @@ public class UserProcess {
 	if (!loadSections())
 	    return false;
 
-	
 	// store arguments in last page
 	int entryOffset = (numPages-1)*pageSize;
 	int stringOffset = entryOffset + args.length*4;
@@ -268,8 +268,6 @@ public class UserProcess {
 	this.argv = entryOffset;
 	
 	for (int i=0; i<argv.length; i++) {
-
-		//key solution.
 	    byte[] stringOffsetBytes = Lib.bytesFromInt(stringOffset);
 	    Lib.assertTrue(writeVirtualMemory(entryOffset,stringOffsetBytes) == 4);
 	    entryOffset += 4;
@@ -357,7 +355,7 @@ public class UserProcess {
 
 
     private static final int
-        syscallHalt = 0,
+    syscallHalt = 0,
 	syscallExit = 1,
 	syscallExec = 2,
 	syscallJoin = 3,
@@ -410,6 +408,13 @@ public class UserProcess {
 		return handleWrite(a0, a1, a2);
 	case syscallClose:
 		return handleClose(a0);
+	case syscallExec:
+		return handleExec(a0, a1, a2);
+	case syscallExit:
+		return handleExit(a0);
+	case syscallJoin:
+		return handleJoin(a0, a1);
+	
 
 	default:
 	    Lib.debug(dbgProcess, "Unknown syscall " + syscall);
@@ -418,23 +423,36 @@ public class UserProcess {
 	return 0;
     }
 
-    private int handleClose(int fd) {
+    
 
-		 if(fd < 0 || fd > 15) {
+	private int handleJoin(int a0, int a1) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	private int handleExit(int a0) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	private int handleExec(int a0, int a1, int a2) {
+		// TODO Auto-generated method stub
+		return 0;
+	}
+
+	private int handleClose(int fd) {
+    	
+		if(fd < 0 || fd > 15 || fds[fd] == null) {
 			 return -1;
-		 }
-		 else if(fds[fd] == null) {
-			 return -1;
-		 }
-		 else {
-			 fds[fd].close();
-			 fds[fd] = null;
-		 }
-		 return 0;
+		 } 
+		
+		fds[fd].openFile.close();
+		fds[fd] = null;
+		return 0;
 	}
 
 	private int handleWrite(int fd, int buffer, int size) {
-		if(fd <0 || fd >MAXFDS) {
+		if(fd < 0 || fd >= MAXFDS) {
 			return -1;
 		}
 		
@@ -445,7 +463,7 @@ public class UserProcess {
 		}
 		if(size < 0) {
 			return -1;
-		}else if (size ==0) {
+		}else if (size == 0) {
 			return 0;
 		}
 		
@@ -461,7 +479,7 @@ public class UserProcess {
 	}
 
 	private int handleRead(int fd, int buffer, int size) {
-		if(fd <0 || fd >MAXFDS) {
+		if(fd < 0 || fd > 15) {
 			return -1;
 		}
 		
@@ -472,23 +490,26 @@ public class UserProcess {
 		}
 		if(size < 0) {
 			return -1;
-		}else if (size ==0) {
-			return 0;
 		}
 		
 		byte[] kernelBuffer = new byte[size];
 		
-		int readSize = readVirtualMemory(buffer, kernelBuffer, 0 , size);
-		if(readSize < size) {
+		int readSize = descriptor.openFile.read(kernelBuffer, 0 , size);
+		if(readSize < -1) {
 			return -1;
 		}
 		
-		readSize = descriptor.openFile.read(kernelBuffer, 0 , readSize);
+		readSize = writeVirtualMemory(buffer, kernelBuffer, 0 , readSize);
 		return readSize;
 	}
 
 	private int handleOpen(int a0) {
 		String fileName = readVirtualMemoryString(a0, MAXSTRLEN);
+		
+		if(fileName == null) {
+			return -1;
+		}
+		
 		OpenFile OFStatus = UserKernel.fileSystem.open(fileName, true);
 		
 		if(OFStatus == null) {
@@ -591,10 +612,10 @@ public class UserProcess {
 		
 		String fileName;
 		OpenFile openFile;
-		public void close() {
-			// TODO Auto-generated method stub
-			
-		}
+	
+		
 	}
 	private FileDescriptor[] fds;
+	
+	
 }
